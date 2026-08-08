@@ -1,101 +1,149 @@
 // Виджет. Живёт в shadow DOM, чтобы стили Meteora на него не влияли и наши
 // на неё тоже. Ничего не знает про DOM сайта — только зовёт QPActions.
+//
+// Раскладка повторяет панель 0xVanChu: слева три поля и оранжевая кнопка,
+// справа два ряда пресетов, в шапке один ▾. Статус — под кнопкой справа.
 window.QPPanel = (() => {
   const S = window.QPSettings;
 
   const CSS = `
   :host { all: initial; }
   .qp {
-    position: fixed; right: 14px; bottom: 14px; z-index: 2147483000;
-    width: 296px; box-sizing: border-box;
-    font: 12px/1.35 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    color: #e6e8ef; background: #12141c; border: 1px solid #2a2f3d;
-    border-radius: 10px; padding: 9px 10px 10px;
-    box-shadow: 0 8px 28px rgba(0,0,0,.55);
+    position: fixed; right: 12px; bottom: 12px; z-index: 2147483000;
+    width: 462px; box-sizing: border-box;
+    font: 12px/1.3 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #e8eaf2; background: #171b2b; border: 1px solid #2b3145;
+    border-radius: 9px; padding: 8px 10px 9px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.5);
     user-select: none;
   }
-  .qp.collapsed { width: auto; padding: 6px 9px; }
-  .qp.collapsed .body { display: none; }
-  .hdr { display: flex; align-items: center; gap: 6px; }
+  .qp.collapsed { width: auto; padding: 6px 10px; }
+  .qp.collapsed .main { display: none; }
+
+  .hdr { display: flex; align-items: center; gap: 8px; position: relative; }
   .ttl { font-weight: 600; font-size: 12px; letter-spacing: .2px; flex: 1;
-         white-space: nowrap; }
-  .ico { cursor: pointer; width: 20px; height: 18px; border-radius: 5px;
-         border: 1px solid #2a2f3d; background: #1a1d28; color: #aab0c0;
-         font-size: 11px; line-height: 16px; text-align: center; padding: 0; }
-  .ico:hover { background: #222634; color: #fff; }
-  .body { margin-top: 8px; }
-  .row { display: flex; gap: 6px; }
+         white-space: nowrap; color: #f2f4fa; }
+  .ttl .b { color: #f5a524; margin-right: 3px; }
+  .menuBtn {
+    cursor: pointer; width: 22px; height: 20px; padding: 0;
+    border: 1px solid #2f3549; background: #1e2436; color: #9aa2b8;
+    border-radius: 5px; font-size: 10px; line-height: 18px; text-align: center;
+  }
+  .menuBtn:hover { background: #262d42; color: #fff; }
+  .menu {
+    display: none; position: absolute; right: 0; top: 24px; z-index: 5;
+    background: #1e2436; border: 1px solid #2f3549; border-radius: 6px;
+    padding: 4px; min-width: 150px; box-shadow: 0 6px 18px rgba(0,0,0,.5);
+  }
+  .menu.open { display: block; }
+  .menu div {
+    padding: 5px 8px; border-radius: 4px; cursor: pointer;
+    font-size: 11px; color: #c9cee0;
+  }
+  .menu div:hover { background: #2a3149; color: #fff; }
+
+  .main { display: flex; gap: 10px; margin-top: 8px; }
+  .left { flex: 1; min-width: 0; }
+  .right { width: 182px; flex: none; display: flex; flex-direction: column;
+           justify-content: flex-start; gap: 5px; }
+
+  .row { display: flex; gap: 7px; }
   .fld { flex: 1; min-width: 0; }
-  .lbl { font-size: 9.5px; color: #7f8699; margin: 0 0 2px 2px; letter-spacing: .3px; }
+  .lbl { font-size: 9px; color: #767e94; margin: 0 0 3px 1px; letter-spacing: .4px; }
   input.v {
-    width: 100%; box-sizing: border-box; height: 27px; padding: 0 7px;
-    background: #1a1d28; border: 1px solid #2a2f3d; border-radius: 6px;
-    color: #e6e8ef; font: 600 12.5px ui-monospace, monospace; outline: none;
+    width: 100%; box-sizing: border-box; height: 29px; padding: 0 8px;
+    background: #10141f; border: 1px solid #2f3549; border-radius: 6px;
+    color: #e8eaf2; font: 600 13px ui-monospace, SFMono-Regular, monospace;
+    outline: none;
   }
-  input.v:focus { border-color: #4b5675; }
-  .presets { display: flex; gap: 4px; margin-top: 6px; }
+  input.v:focus { border-color: #3f79c8; }
+
+  .presets { display: flex; gap: 5px; }
   .presets button {
-    flex: 1; height: 22px; padding: 0; cursor: pointer;
-    background: #1a1d28; border: 1px solid #2a2f3d; border-radius: 5px;
-    color: #aab0c0; font: 600 11px ui-monospace, monospace;
+    flex: 1; height: 26px; padding: 0; cursor: pointer;
+    background: #10141f; border: 1px solid #2f3549; border-radius: 5px;
+    color: #a7aec2; font: 600 11px ui-monospace, monospace;
   }
-  .presets button:hover { background: #222634; color: #fff; }
-  .presets button.on { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .presets button:hover { background: #1c2333; color: #fff; }
+  .presets button.on { background: #2f9ef4; border-color: #2f9ef4; color: #fff; }
+
   .go {
     width: 100%; margin-top: 9px; height: 32px; cursor: pointer;
-    background: #f0761a; border: 0; border-radius: 7px;
+    background: #f4881f; border: 0; border-radius: 6px;
     color: #fff; font: 700 13px ui-sans-serif, system-ui, sans-serif;
-    letter-spacing: .3px;
+    letter-spacing: .2px;
   }
-  .go:hover { background: #ff8524; }
-  .go:disabled { opacity: .55; cursor: default; }
-  .st { margin-top: 6px; min-height: 14px; font-size: 10.5px; color: #8b93a7;
-        white-space: pre-wrap; }
-  .st.ok { color: #46c66d; }
+  .go:hover { background: #ff9730; }
+  .go:disabled { opacity: .6; cursor: default; }
+
+  .st { margin-top: 5px; min-height: 13px; font-size: 10.5px; color: #8b93a7;
+        text-align: right; white-space: pre-wrap; }
+  .st.ok { color: #4ade80; }
   .st.err { color: #ff6b6b; }
-  .cfg { display: none; margin-top: 8px; border-top: 1px solid #242835; padding-top: 7px; }
+
+  .cfg { display: none; margin-top: 8px; border-top: 1px solid #262c3d; padding-top: 7px; }
   .cfg.open { display: block; }
-  .cfg .lbl { margin-top: 5px; }
+  .cfg .two { display: flex; gap: 8px; }
+  .cfg .two > div { flex: 1; }
   .cfg input.v, .cfg select.v {
-    font: 500 11px ui-monospace, monospace; height: 24px;
+    font: 500 11px ui-monospace, monospace; height: 25px;
     width: 100%; box-sizing: border-box; padding: 0 6px;
-    background: #1a1d28; border: 1px solid #2a2f3d; border-radius: 6px;
-    color: #e6e8ef; outline: none;
+    background: #10141f; border: 1px solid #2f3549; border-radius: 5px;
+    color: #e8eaf2; outline: none;
   }
-  .chk { display: flex; align-items: center; gap: 6px; margin-top: 7px;
-         font-size: 10.5px; color: #aab0c0; cursor: pointer; }
+  .chk { display: flex; align-items: center; gap: 6px; margin-top: 8px;
+         font-size: 10.5px; color: #a7aec2; cursor: pointer; }
   `;
 
   const HTML = `
   <div class="qp">
     <div class="hdr">
-      <span class="ttl">⚡ Meteora QP</span>
-      <button class="ico" id="cfgBtn" title="Настройки">⚙</button>
-      <button class="ico" id="colBtn" title="Свернуть">▾</button>
-    </div>
-    <div class="body">
-      <div class="row">
-        <div class="fld"><div class="lbl">SOL</div><input class="v" id="sol" inputmode="decimal"></div>
-        <div class="fld"><div class="lbl">Min %</div><input class="v" id="min" inputmode="decimal"></div>
-        <div class="fld"><div class="lbl">Max %</div><input class="v" id="max" inputmode="decimal"></div>
+      <span class="ttl"><span class="b">⚡</span>Meteora QP</span>
+      <button class="menuBtn" id="menuBtn" title="Меню">▾</button>
+      <div class="menu" id="menu">
+        <div id="mCfg">Пресеты и настройки</div>
+        <div id="mCol">Свернуть панель</div>
       </div>
-      <div class="presets" id="rangeRow"></div>
-      <div class="presets" id="solRow"></div>
-      <button class="go" id="go">⚡ YOLO IN</button>
-      <div class="st" id="st"></div>
-      <div class="cfg" id="cfg">
-        <div class="lbl">Пресеты диапазона, %</div>
-        <input class="v" id="cfgRange">
-        <div class="lbl">Пресеты суммы, SOL</div>
-        <input class="v" id="cfgSol">
-        <div class="lbl">Стратегия</div>
-        <select class="v" id="cfgStrategy">
-          <option value="Spot">Spot</option>
-          <option value="Curve">Curve</option>
-          <option value="Bid Ask">Bid Ask</option>
-          <option value="">не трогать</option>
-        </select>
-        <label class="chk"><input type="checkbox" id="cfgSubmit"> нажимать кнопку отправки</label>
+    </div>
+    <div class="main">
+      <div class="left">
+        <div class="row">
+          <div class="fld"><div class="lbl">SOL</div><input class="v" id="sol" inputmode="decimal"></div>
+          <div class="fld"><div class="lbl">Min %</div><input class="v" id="min" inputmode="decimal"></div>
+          <div class="fld"><div class="lbl">Max %</div><input class="v" id="max" inputmode="decimal"></div>
+        </div>
+        <button class="go" id="go">⚡ Yolo In</button>
+        <div class="st" id="st"></div>
+        <div class="cfg" id="cfg">
+          <div class="two">
+            <div>
+              <div class="lbl">Пресеты диапазона, %</div>
+              <input class="v" id="cfgRange">
+            </div>
+            <div>
+              <div class="lbl">Пресеты суммы, SOL</div>
+              <input class="v" id="cfgSol">
+            </div>
+          </div>
+          <div class="two" style="margin-top:6px">
+            <div>
+              <div class="lbl">Стратегия</div>
+              <select class="v" id="cfgStrategy">
+                <option value="Spot">Spot</option>
+                <option value="Curve">Curve</option>
+                <option value="Bid Ask">Bid Ask</option>
+                <option value="">не трогать</option>
+              </select>
+            </div>
+            <div>
+              <label class="chk"><input type="checkbox" id="cfgSubmit"> нажимать кнопку отправки</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="right">
+        <div class="presets" id="rangeRow"></div>
+        <div class="presets" id="solRow"></div>
       </div>
     </div>
   </div>`;
@@ -163,17 +211,24 @@ window.QPPanel = (() => {
       const cfg = { ...v, strategy: S.get().strategy, autoSubmit: S.get().autoSubmit, quoteSymbol: 'SOL' };
       const r = await window.QPActions.run(cfg, (m) => status(m));
       const pct = (x) => (x == null ? '?' : (x > 0 ? '+' : '') + x + '%');
-      const tail = r.submitted
-        ? 'отправлено — подтверди в кошельке'
-        : (r.submitLabel ? `кнопка «${r.submitLabel}» не нажата` : 'поля заполнены');
       const other = r.otherAmount ? ` · ${r.otherSymbol} ${r.otherAmount}` : '';
-      status(`✅ Готово: ${pct(r.min)} … ${pct(r.max)} · ${r.bins ?? '?'} бинов · ${r.strategy || '—'}${other}\n${tail}`, 'ok');
+      const head = r.submitted ? '✅ Done!' : '✅ Заполнено';
+      const tail = r.submitted
+        ? 'подтверди в кошельке'
+        : (r.submitLabel ? `«${r.submitLabel}» не нажата` : '');
+      status(`${head}  ${pct(r.min)} … ${pct(r.max)} · ${r.bins ?? '?'} бинов${other}\n${tail}`, 'ok');
     } catch (e) {
       status('✗ ' + (e && e.message ? e.message : String(e)), 'err');
     } finally {
       busy = false;
       $('go').disabled = false;
     }
+  }
+
+  function setCollapsed(collapsed) {
+    root.querySelector('.qp').classList.toggle('collapsed', collapsed);
+    $('mCol').textContent = collapsed ? 'Развернуть панель' : 'Свернуть панель';
+    S.save({ collapsed });
   }
 
   function wire() {
@@ -185,7 +240,7 @@ window.QPPanel = (() => {
     $('cfgSol').value = c.solPresets.join(', ');
     $('cfgStrategy').value = c.strategy;
     $('cfgSubmit').checked = !!c.autoSubmit;
-    if (c.collapsed) root.querySelector('.qp').classList.add('collapsed');
+    if (c.collapsed) setCollapsed(true);
 
     $('go').addEventListener('click', go);
     for (const id of ['sol', 'min', 'max']) {
@@ -193,14 +248,18 @@ window.QPPanel = (() => {
       $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
     }
 
-    $('colBtn').addEventListener('click', () => {
-      const q = root.querySelector('.qp');
-      q.classList.toggle('collapsed');
-      const collapsed = q.classList.contains('collapsed');
-      $('colBtn').textContent = collapsed ? '▴' : '▾';
-      S.save({ collapsed });
+    const menu = $('menu');
+    $('menuBtn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.classList.toggle('open');
     });
-    $('cfgBtn').addEventListener('click', () => $('cfg').classList.toggle('open'));
+    // Клик мимо меню закрывает его — и внутри shadow DOM, и на самой странице.
+    root.addEventListener('click', () => menu.classList.remove('open'));
+    document.addEventListener('click', () => menu.classList.remove('open'));
+
+    $('mCfg').addEventListener('click', () => $('cfg').classList.toggle('open'));
+    $('mCol').addEventListener('click', () =>
+      setCollapsed(!root.querySelector('.qp').classList.contains('collapsed')));
 
     $('cfgRange').addEventListener('change', (e) => {
       const list = S.parseList(e.target.value);
