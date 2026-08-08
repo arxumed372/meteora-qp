@@ -6,7 +6,7 @@
   "permissions": ["storage"],
   "content_scripts": [
     {
-      "matches": ["https://app.meteora.ag/*"],
+      "matches": ["https://meteora.ag/*", "https://*.meteora.ag/*"],
       "js": [
         "src/settings.js",
         "src/dom.js",
