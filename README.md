@@ -68,8 +68,9 @@ Meteora регулярно переписывает интерфейс. Расш
 Тогда виджет не будет молчать — он покажет красным, какое поле не нашёл.
 Правится один файл: `src/dom.js`, там весь слой якорей.
 
-Отчёт по устройству страницы Meteora: `METEORA-QP-PHASE1-RESEARCH.md`
-в `~/projects/meteora-qp-research/`.
+Весь слой якорей собран в одном месте намеренно: `src/dom.js` знает, как
+устроена страница Meteora, а `src/actions.js` — в каком порядке её заполнять.
+Остальные файлы про интерфейс самого виджета.
 
 ## Проверено
 
@@ -86,3 +87,86 @@ Meteora регулярно переписывает интерфейс. Расш
 Кошелька в тестовом браузере нет, поэтому кнопка отправки была заблокирована
 (`Wallet Not Connected`) и расширение это честно сообщило. Всё до неё —
 проверено по-настоящему, а не на словах.
+
+
+---
+
+# Meteora QP — Quick Position (English)
+
+A tiny Chrome extension that opens a DLMM liquidity position on Meteora in one
+click.
+
+Opening a position by hand means: turn off Auto-Fill, pick a strategy, type the
+amount, set Min and Max, hit submit. Five steps, usually while a coin is moving
+and seconds matter. QP does all of it with one button.
+
+## The panel
+
+Docked bottom-right on a pool page:
+
+- **SOL** — position size, absolute
+- **Min % / Max %** — range bounds as a percentage of the current price
+- **Top preset row** — range width: clicking `15` sets `-15` and `+15` at once
+- **Bottom preset row** — ready-made SOL amounts
+- **⚡ Yolo In** — fills Meteora's own fields and presses its submit button
+
+Both preset rows are editable. Strategy defaults to `Spot` and can be switched
+to `Curve` or `Bid Ask`. Auto-submit can be turned off, leaving QP to fill the
+fields only.
+
+## The one detail that makes it work
+
+**Order of filling.** While a single amount is entered and Auto-Fill is off,
+Meteora rewrites the range into a one-sided shape by itself — Max drifts to
+`0%`, Min to `-42%`, 70 bins. So the amount goes in **before** the bounds:
+
+```
+Auto-Fill off  ->  SOL amount  ->  Max %  ->  Min %
+```
+
+In that order a symmetric ±15% range sticks, and the entry stays pure SOL — the
+other token is not required. In the reverse order you get something you did not
+ask for, and you will not notice immediately.
+
+This was measured against the live page across four orderings, not assumed.
+
+Percentages snap to bins: type `-15` and you get `-15.41%`. The widget reports
+what actually landed, never what you typed.
+
+## Safety
+
+- never stores or asks for a private key or seed phrase
+- never signs transactions
+- never talks to the wallet at all
+- no network access, no telemetry, no server
+- only permission is `storage`, only host is `meteora.ag`
+
+All it does is fill fields on the page and press a button you would press
+yourself. Transaction approval stays in your own wallet, as usual.
+
+If a window of an existing position is open (`Add / Rebalance / Withdraw`),
+QP refuses to run and asks you to close it. That panel has identical fields,
+and filling the wrong one means sending money somewhere you did not intend.
+
+## Install
+
+1. Download and unpack the folder
+2. `chrome://extensions/`
+3. Enable **Developer mode**
+4. **Load unpacked** → select the folder
+5. Open any pool at `meteora.ag/dlmm/…`
+
+## When it breaks
+
+Meteora rewrites its UI regularly. The extension anchors on semantic attributes
+(`data-tour`, `data-sentry-component`, `aria-label`) rather than on layout, but
+one day that will stop matching. The widget will not fail silently — it shows
+in red which control it could not find. One file to fix: `src/dom.js`.
+
+## Credit
+
+The idea is the `Meteora QP` panel by [@0xVanChu](https://x.com/0xVanChu), which
+is a Tampermonkey userscript. This is the same thing as a plain extension, with
+no Tampermonkey needed.
+
+MIT licensed. Six files, no build step, no dependencies.
