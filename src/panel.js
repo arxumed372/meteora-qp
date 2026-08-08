@@ -23,6 +23,10 @@ window.QPPanel = (() => {
   .hdr { display: flex; align-items: center; gap: 8px; position: relative; }
   .ttl { font-weight: 600; font-size: 12px; letter-spacing: .2px; flex: 1;
          white-space: nowrap; color: #f2f4fa; }
+  /* Страховка от тупика: по заголовку панель всегда разворачивается обратно,
+     даже если до меню почему-то не добраться. */
+  .qp.collapsed .ttl { cursor: pointer; }
+  .qp.collapsed .ttl:hover { color: #fff; }
   .ttl .b { color: #f5a524; margin-right: 3px; }
   .menuBtn {
     cursor: pointer; width: 22px; height: 20px; padding: 0;
@@ -30,8 +34,11 @@ window.QPPanel = (() => {
     border-radius: 5px; font-size: 10px; line-height: 18px; text-align: center;
   }
   .menuBtn:hover { background: #262d42; color: #fff; }
+  /* Панель прижата к низу экрана, поэтому меню раскрывается ВВЕРХ. Вниз оно
+     уезжало за край окна: у свёрнутой панели высота ~32px, и пункты просто
+     оказывались под нижней границей экрана — свернуть можно, развернуть нельзя. */
   .menu {
-    display: none; position: absolute; right: 0; top: 24px; z-index: 5;
+    display: none; position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 5;
     background: #1e2436; border: 1px solid #2f3549; border-radius: 6px;
     padding: 4px; min-width: 150px; box-shadow: 0 6px 18px rgba(0,0,0,.5);
   }
@@ -225,9 +232,13 @@ window.QPPanel = (() => {
     }
   }
 
+  const isCollapsed = () => root.querySelector('.qp').classList.contains('collapsed');
+
   function setCollapsed(collapsed) {
-    root.querySelector('.qp').classList.toggle('collapsed', collapsed);
+    const qp = root.querySelector('.qp');
+    qp.classList.toggle('collapsed', collapsed);
     $('mCol').textContent = collapsed ? 'Развернуть панель' : 'Свернуть панель';
+    qp.querySelector('.ttl').title = collapsed ? 'Развернуть' : '';
     S.save({ collapsed });
   }
 
@@ -257,9 +268,15 @@ window.QPPanel = (() => {
     root.addEventListener('click', () => menu.classList.remove('open'));
     document.addEventListener('click', () => menu.classList.remove('open'));
 
-    $('mCfg').addEventListener('click', () => $('cfg').classList.toggle('open'));
-    $('mCol').addEventListener('click', () =>
-      setCollapsed(!root.querySelector('.qp').classList.contains('collapsed')));
+    $('mCfg').addEventListener('click', () => {
+      if (isCollapsed()) setCollapsed(false);   // настройки в свёрнутой панели не видны
+      $('cfg').classList.add('open');
+    });
+    $('mCol').addEventListener('click', () => setCollapsed(!isCollapsed()));
+    // Клик по заголовку разворачивает — второй путь наружу, без меню.
+    root.querySelector('.ttl').addEventListener('click', () => {
+      if (isCollapsed()) setCollapsed(false);
+    });
 
     $('cfgRange').addEventListener('change', (e) => {
       const list = S.parseList(e.target.value);
