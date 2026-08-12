@@ -25,7 +25,11 @@ meteora.ag в один клик: сумма в SOL и диапазон в про
 - **Нижний ряд кнопок** — готовые суммы в SOL.
 - **⚡ YOLO IN** — заполняет поля Meteora и нажимает её кнопку отправки.
   Подтверждение транзакции остаётся в твоём кошельке.
-- **▾** — меню: пресеты и настройки, свернуть панель.
+- **▾** — меню: пресеты и настройки, свернуть панель, вернуть в угол.
+- **Перетаскивание** — потяни за заголовок, панель встанет куда нужно. Место
+  запоминается и переживает перезагрузку страницы. За край экрана утащить
+  нельзя, при изменении размера окна панель сама возвращается в границы.
+  «Вернуть в угол» в меню ставит её обратно в правый нижний угол.
 
 QP открывает **новую** позицию. Если на экране висит окно уже открытой позиции
 (вкладки `Add / Rebalance / Withdraw`), виджет откажется работать и попросит
@@ -109,6 +113,8 @@ Docked bottom-right on a pool page:
 - **Top preset row** — range width: clicking `15` sets `-15` and `+15` at once
 - **Bottom preset row** — ready-made SOL amounts
 - **⚡ Yolo In** — fills Meteora's own fields and presses its submit button
+- **Drag by the header** to move the panel anywhere; the spot is remembered and
+  survives a reload, and it cannot be dragged off-screen
 
 Both preset rows are editable. Strategy defaults to `Spot` and can be switched
 to `Curve` or `Bid Ask`. Auto-submit can be turned off, leaving QP to fill the

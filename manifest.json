@@ -1,12 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Meteora QP — Quick Position",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Быстрое открытие DLMM-позиции на Meteora: сумма в SOL и диапазон в процентах в один клик.",
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "content_scripts": [
     {
-      "matches": ["https://meteora.ag/*", "https://*.meteora.ag/*"],
+      "matches": [
+        "https://meteora.ag/*",
+        "https://*.meteora.ag/*"
+      ],
       "js": [
         "src/settings.js",
         "src/dom.js",

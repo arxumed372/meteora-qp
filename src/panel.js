@@ -20,7 +20,11 @@ window.QPPanel = (() => {
   .qp.collapsed { width: auto; padding: 6px 10px; }
   .qp.collapsed .main { display: none; }
 
-  .hdr { display: flex; align-items: center; gap: 8px; position: relative; }
+  /* Заголовок — ручка для перетаскивания. */
+  .hdr { display: flex; align-items: center; gap: 8px; position: relative;
+         cursor: grab; touch-action: none; }
+  .qp.dragging { box-shadow: 0 14px 40px rgba(0,0,0,.65); }
+  .qp.dragging .hdr { cursor: grabbing; }
   .ttl { font-weight: 600; font-size: 12px; letter-spacing: .2px; flex: 1;
          white-space: nowrap; color: #f2f4fa; }
   /* Страховка от тупика: по заголовку панель всегда разворачивается обратно,
@@ -34,14 +38,16 @@ window.QPPanel = (() => {
     border-radius: 5px; font-size: 10px; line-height: 18px; text-align: center;
   }
   .menuBtn:hover { background: #262d42; color: #fff; }
-  /* Панель прижата к низу экрана, поэтому меню раскрывается ВВЕРХ. Вниз оно
-     уезжало за край окна: у свёрнутой панели высота ~32px, и пункты просто
-     оказывались под нижней границей экрана — свернуть можно, развернуть нельзя. */
+  /* По умолчанию меню раскрывается ВВЕРХ: панель стоит у нижнего края, и вниз
+     оно уезжало за границу окна — свернуть можно, развернуть нечем. Но панель
+     теперь таскается, поэтому направление выбирается при каждом открытии по
+     фактическому свободному месту, класс .down переворачивает его вниз. */
   .menu {
     display: none; position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 5;
     background: #1e2436; border: 1px solid #2f3549; border-radius: 6px;
     padding: 4px; min-width: 150px; box-shadow: 0 6px 18px rgba(0,0,0,.5);
   }
+  .menu.down { bottom: auto; top: calc(100% + 6px); }
   .menu.open { display: block; }
   .menu div {
     padding: 5px 8px; border-radius: 4px; cursor: pointer;
@@ -110,6 +116,7 @@ window.QPPanel = (() => {
       <div class="menu" id="menu">
         <div id="mCfg">Пресеты и настройки</div>
         <div id="mCol">Свернуть панель</div>
+        <div id="mPos">Вернуть в угол</div>
       </div>
     </div>
     <div class="main">
@@ -234,12 +241,123 @@ window.QPPanel = (() => {
 
   const isCollapsed = () => root.querySelector('.qp').classList.contains('collapsed');
 
+  // ── Перетаскивание ──────────────────────────────────────────────────────
+  //
+  // Панель по умолчанию приклеена к правому нижнему углу (right/bottom). Как
+  // только её потащили, переходим на left/top — иначе координаты мыши и
+  // координаты панели считаются от разных углов и она едет в другую сторону.
+  //
+  // Главное правило: панель нельзя утащить за край экрана. Прошлый баг был
+  // ровно про это — свёрнутое окно оказалось недостижимым. Поэтому любое
+  // положение проходит через clamp, и он же вызывается при ресайзе окна.
+  const MARGIN = 4;
+
+  function clamp(left, top) {
+    const qp = root.querySelector('.qp');
+    const w = qp.offsetWidth, h = qp.offsetHeight;
+    const maxLeft = Math.max(MARGIN, innerWidth - w - MARGIN);
+    const maxTop = Math.max(MARGIN, innerHeight - h - MARGIN);
+    return {
+      left: Math.min(Math.max(MARGIN, left), maxLeft),
+      top: Math.min(Math.max(MARGIN, top), maxTop),
+    };
+  }
+
+  function applyPos(pos) {
+    const qp = root.querySelector('.qp');
+    if (!pos) {                       // вернуться в угол
+      qp.style.left = qp.style.top = '';
+      qp.style.right = '12px';
+      qp.style.bottom = '12px';
+      return;
+    }
+    const p = clamp(pos.left, pos.top);
+    qp.style.right = qp.style.bottom = 'auto';
+    qp.style.left = p.left + 'px';
+    qp.style.top = p.top + 'px';
+    return p;
+  }
+
+  // Свёрнутая панель меняет размер, поэтому положение переприжимаем и после
+  // сворачивания, и после ресайза окна.
+  function reclamp() {
+    const saved = S.get().pos;
+    if (!saved) return;
+    const p = applyPos(saved);
+    if (p && (p.left !== saved.left || p.top !== saved.top)) S.save({ pos: p });
+  }
+
+  let justDragged = false;
+
+  function initDrag() {
+    const qp = root.querySelector('.qp');
+    const hdr = root.querySelector('.hdr');
+    let start = null;
+
+    // Перетаскивание держится на setPointerCapture, и это не вкусовщина.
+    // Замерял три варианта на живой странице:
+    //   1) слушать на самой шапке — она высотой ~20px, курсор уходит с неё на
+    //      первом же движении, панель не едет вообще;
+    //   2) слушать на окне — едет, но ровно до середины экрана: там график
+    //      TradingView, он в IFRAME, и события уходят внутрь него. Верхний
+    //      документ замолкает целиком, теряется и pointerup, поэтому положение
+    //      даже не сохранялось;
+    //   3) захват указателя — события приходят при любом положении курсора,
+    //      включая iframe. Расплата: последующий click перенацеливается на
+    //      элемент-захватчик, поэтому разворачивание по клику висит на шапке,
+    //      а не на заголовке, и гасится флагом после реального перетаскивания.
+    const onMove = (e) => {
+      if (!start) return;
+      const dx = e.clientX - start.x, dy = e.clientY - start.y;
+      // Порог: без него любой клик по заголовку считался бы перетаскиванием.
+      if (!start.moved && Math.hypot(dx, dy) < 4) return;
+      if (!start.moved) { start.moved = true; qp.classList.add('dragging'); }
+      applyPos({ left: start.left + dx, top: start.top + dy });
+      e.preventDefault();
+    };
+
+    const onUp = () => {
+      if (!start) return;
+      const moved = start.moved;
+      start = null;
+      qp.classList.remove('dragging');
+      if (!moved) return;             // это был клик, положение не трогаем
+      justDragged = true;             // гасим click, который придёт следом
+      const r = qp.getBoundingClientRect();
+      const p = clamp(r.left, r.top);
+      applyPos(p);
+      S.save({ pos: p });
+    };
+
+    hdr.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest('.menuBtn, .menu')) return;   // это клики, не таскание
+      const r = qp.getBoundingClientRect();
+      start = { x: e.clientX, y: e.clientY, left: r.left, top: r.top, moved: false };
+      try { hdr.setPointerCapture(e.pointerId); } catch (err) { /* редкий браузер */ }
+    });
+    hdr.addEventListener('pointermove', onMove);
+    hdr.addEventListener('pointerup', onUp);
+    hdr.addEventListener('pointercancel', onUp);
+
+    // Разворачивание по клику висит здесь, а не на заголовке: захват указателя
+    // перенацеливает click на шапку, и обработчик на .ttl просто не сработает.
+    hdr.addEventListener('click', (e) => {
+      if (justDragged) { justDragged = false; return; }
+      if (e.target.closest('.menuBtn, .menu')) return;
+      if (isCollapsed()) setCollapsed(false);
+    });
+
+    addEventListener('resize', reclamp);
+  }
+
   function setCollapsed(collapsed) {
     const qp = root.querySelector('.qp');
     qp.classList.toggle('collapsed', collapsed);
     $('mCol').textContent = collapsed ? 'Развернуть панель' : 'Свернуть панель';
     qp.querySelector('.ttl').title = collapsed ? 'Развернуть' : '';
     S.save({ collapsed });
+    reclamp();      // размер изменился — вернуть в границы экрана
   }
 
   function wire() {
@@ -252,6 +370,8 @@ window.QPPanel = (() => {
     $('cfgStrategy').value = c.strategy;
     $('cfgSubmit').checked = !!c.autoSubmit;
     if (c.collapsed) setCollapsed(true);
+    if (c.pos) applyPos(c.pos);
+    initDrag();
 
     $('go').addEventListener('click', go);
     for (const id of ['sol', 'min', 'max']) {
@@ -262,7 +382,17 @@ window.QPPanel = (() => {
     const menu = $('menu');
     $('menuBtn').addEventListener('click', (e) => {
       e.stopPropagation();
-      menu.classList.toggle('open');
+      const opening = !menu.classList.contains('open');
+      if (opening) {
+        // Панель можно утащить наверх, поэтому направление выбираем по месту:
+        // меню всегда должно помещаться на экране целиком.
+        menu.classList.add('open');
+        menu.classList.remove('down');
+        const r = menu.getBoundingClientRect();
+        if (r.top < 0) menu.classList.add('down');
+      } else {
+        menu.classList.remove('open');
+      }
     });
     // Клик мимо меню закрывает его — и внутри shadow DOM, и на самой странице.
     root.addEventListener('click', () => menu.classList.remove('open'));
@@ -273,8 +403,13 @@ window.QPPanel = (() => {
       $('cfg').classList.add('open');
     });
     $('mCol').addEventListener('click', () => setCollapsed(!isCollapsed()));
-    // Клик по заголовку разворачивает — второй путь наружу, без меню.
+    $('mPos').addEventListener('click', () => { applyPos(null); S.save({ pos: null }); });
+    // Клик по заголовку разворачивает панель — второй путь наружу, без меню.
+    // Живёт в initDrag на самой шапке: захват указателя перенацеливает click,
+    // и обработчик на .ttl не сработал бы. Здесь только страховка на случай,
+    // если setPointerCapture недоступен и перенацеливания не будет.
     root.querySelector('.ttl').addEventListener('click', () => {
+      if (justDragged) return;
       if (isCollapsed()) setCollapsed(false);
     });
 

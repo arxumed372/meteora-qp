@@ -14,6 +14,7 @@ window.QPSettings = (() => {
     strategy: 'Spot',      // Spot | Curve | Bid Ask | '' — пусто значит не трогать
     autoSubmit: true,      // дожимать родную кнопку отправки
     collapsed: false,
+    pos: null,             // {left, top} в px, если панель перетащили; null — угол
   };
 
   let cache = { ...DEFAULTS };
